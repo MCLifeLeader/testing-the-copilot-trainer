@@ -1,4 +1,5 @@
 @page "/chat"
+@inject IJSRuntime JSRuntime
 
 <PageTitle>Chat</PageTitle>
 
@@ -25,7 +26,8 @@
                    class="form-control" 
                    placeholder="Type your message..." 
                    @bind="currentMessage" 
-                   @onkeypress="OnKeyPress" />
+                   @onkeypress="OnKeyPress" 
+                   @ref="inputElement" />
             <button class="btn btn-primary" 
                     type="button" 
                     @onclick="SendMessage"
@@ -39,6 +41,7 @@
 @code {
     private string currentMessage = string.Empty;
     private List<ChatMessage> messages = new List<ChatMessage>();
+    private ElementReference inputElement;
 
     protected override void OnInitialized()
     {
@@ -46,6 +49,14 @@
         messages.Add(new ChatMessage { Content = "Hello! How can I help you today?", IsUser = false, Timestamp = DateTime.Now.AddMinutes(-5) });
         messages.Add(new ChatMessage { Content = "Hi there! I'm testing the chat functionality.", IsUser = true, Timestamp = DateTime.Now.AddMinutes(-4) });
         messages.Add(new ChatMessage { Content = "Great! The chat is working well. Feel free to ask me anything.", IsUser = false, Timestamp = DateTime.Now.AddMinutes(-3) });
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await ScrollToBottom();
+        }
     }
 
     private async Task SendMessage()
@@ -66,13 +77,29 @@
 
         // Trigger UI update
         StateHasChanged();
+        await ScrollToBottom();
 
-        // Simulate bot response (for now, just echo back)
+        // Simulate bot response with some variety
         await Task.Delay(1000); // Simulate thinking time
+        
+        var responses = new[]
+        {
+            "That's interesting! Can you tell me more?",
+            "I understand. Is there anything specific you'd like to know?",
+            "Thanks for sharing that with me.",
+            "That's a great question! Let me think about that.",
+            "I see what you mean. How can I help you with that?",
+            "That sounds important. Would you like to explore this further?",
+            "I appreciate you bringing that up. What are your thoughts on it?",
+            "That's a good point. Is there anything else you'd like to discuss?"
+        };
+        
+        var random = new Random();
+        var response = responses[random.Next(responses.Length)];
         
         messages.Add(new ChatMessage 
         { 
-            Content = $"You said: {userMessage}", 
+            Content = response, 
             IsUser = false, 
             Timestamp = DateTime.Now 
         });
@@ -91,8 +118,7 @@
 
     private async Task ScrollToBottom()
     {
-        await Task.Delay(50); // Small delay to ensure DOM is updated
-        // Note: In a real implementation, you might use JavaScript interop to scroll
+        await JSRuntime.InvokeVoidAsync("scrollToBottom", "chatMessages");
     }
 
     public class ChatMessage
