@@ -1,11 +1,48 @@
-html, body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; }
+:root {
+    /* Light theme colors */
+    --primary-color: #006bb7;
+    --btn-primary-bg: #1b6ec2;
+    --btn-primary-border: #1861ac;
+    --content-bg: #ffffff;
+    --text-color: #000000;
+    --top-row-bg: #f7f7f7;
+    --border-color: #d6d5d5;
+    --sidebar-bg: linear-gradient(180deg, rgb(5, 39, 103) 0%, #3a0647 70%);
+    --nav-text-color: #d7d7d7;
+    --nav-hover-bg: rgba(255, 255, 255, 0.1);
+    --nav-active-bg: rgba(255, 255, 255, 0.37);
+    --navbar-toggler-bg: rgba(0, 0, 0, 0.4);
+}
 
-a, .btn-link { color: #006bb7; }
+[data-theme="dark"] {
+    /* Dark theme colors */
+    --primary-color: #4da6ff;
+    --btn-primary-bg: #0d6efd;
+    --btn-primary-border: #0a58ca;
+    --content-bg: #1a1a1a;
+    --text-color: #e9ecef;
+    --top-row-bg: #2d3436;
+    --border-color: #495057;
+    --sidebar-bg: linear-gradient(180deg, rgb(26, 26, 26) 0%, #1a1a1a 70%);
+    --nav-text-color: #adb5bd;
+    --nav-hover-bg: rgba(255, 255, 255, 0.05);
+    --nav-active-bg: rgba(255, 255, 255, 0.1);
+    --navbar-toggler-bg: rgba(255, 255, 255, 0.1);
+}
+
+html, body { 
+    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    background-color: var(--content-bg);
+    color: var(--text-color);
+    transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+a, .btn-link { color: var(--primary-color); }
 
 .btn-primary {
     color: #fff;
-    background-color: #1b6ec2;
-    border-color: #1861ac;
+    background-color: var(--btn-primary-bg);
+    border-color: var(--btn-primary-border);
 }
 
 .btn:focus, .btn:active:focus, .btn-link.nav-link:focus, .form-control:focus, .form-check-input:focus { box-shadow: 0 0 0 0.1rem white, 0 0 0 0.25rem #258cfb; }
