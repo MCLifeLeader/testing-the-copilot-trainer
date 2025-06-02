@@ -8,6 +8,7 @@ builder.AddServiceDefaults();
 
 // Add services to the container.
 builder.Services.AddProblemDetails();
+builder.Services.AddControllers();
 
 var app = builder.Build();
 
@@ -30,6 +31,7 @@ app.MapGet("/weatherforecast", () =>
     })
     .WithName("GetWeatherForecast");
 
+app.MapControllers();
 app.MapDefaultEndpoints();
 
 app.Run();
