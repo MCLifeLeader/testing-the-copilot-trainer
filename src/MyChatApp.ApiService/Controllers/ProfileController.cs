@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using MyChatApp.ApiService.Models;
 using MyChatApp.Web.Data;
 
@@ -15,11 +16,13 @@ namespace MyChatApp.ApiService.Controllers
     public class ProfileController : ControllerBase
     {
         private readonly UserManager<ApplicationUser> _userManager;
+        private readonly ApplicationDbContext _context;
         private readonly ILogger<ProfileController> _logger;
 
-        public ProfileController(UserManager<ApplicationUser> userManager, ILogger<ProfileController> logger)
+        public ProfileController(UserManager<ApplicationUser> userManager, ApplicationDbContext context, ILogger<ProfileController> logger)
         {
             _userManager = userManager;
+            _context = context;
             _logger = logger;
         }
 
@@ -78,13 +81,15 @@ namespace MyChatApp.ApiService.Controllers
                 return Forbid();
             }
 
-            // For ContactsOnly, we'd need to check if users are contacts
-            // For now, treating it as public since contact relationship isn't implemented yet
+            // For ContactsOnly, check if users are contacts
             if (targetUser.ProfileVisibility == ProfileVisibility.ContactsOnly &&
                 (requestingUser is null || requestingUser.Id != targetUser.Id))
             {
-                // TODO: Check if users are contacts when contact system is implemented
-                _logger.LogInformation("ContactsOnly privacy check skipped - contact system not implemented");
+                var areContacts = await AreUsersContactsAsync(requestingUser!.Id, targetUser.Id);
+                if (!areContacts)
+                {
+                    return Forbid();
+                }
             }
 
             var profile = new UserProfileDto
@@ -169,6 +174,23 @@ namespace MyChatApp.ApiService.Controllers
             };
 
             return Ok(updatedProfile);
+        }
+
+        /// <summary>
+        /// Check if two users are connected contacts
+        /// </summary>
+        /// <param name="userId1">First user ID</param>
+        /// <param name="userId2">Second user ID</param>
+        /// <returns>True if users are connected contacts</returns>
+        private async Task<bool> AreUsersContactsAsync(string userId1, string userId2)
+        {
+            var contact = await _context.Contacts
+                .FirstOrDefaultAsync(c =>
+                    ((c.RequesterId == userId1 && c.ReceiverId == userId2) ||
+                     (c.RequesterId == userId2 && c.ReceiverId == userId1)) &&
+                    c.Status == ContactStatus.Accepted);
+
+            return contact is not null;
         }
     }
 }

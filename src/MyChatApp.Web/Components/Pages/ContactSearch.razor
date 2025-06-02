@@ -1,0 +1,276 @@
+@page "/contacts/search"
+@using MyChatApp.Web.Models
+@using System.Net.Http.Json
+@inject HttpClient Http
+@inject IJSRuntime JSRuntime
+@attribute [Authorize]
+
+<PageTitle>Search Contacts</PageTitle>
+
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <h1 class="h3 mb-4">
+                <i class="bi bi-search me-2"></i>
+                Search Contacts
+            </h1>
+
+            <!-- Search Form -->
+            <div class="card mb-4">
+                <div class="card-body">
+                    <EditForm Model="searchRequest" OnValidSubmit="SearchUsersAsync">
+                        <DataAnnotationsValidator />
+                        
+                        <div class="input-group">
+                            <span class="input-group-text">
+                                <i class="bi bi-search"></i>
+                            </span>
+                            <InputText @bind-Value="searchRequest.Query" 
+                                      class="form-control" 
+                                      placeholder="Search by name, username, or email..." 
+                                      disabled="@isSearching" />
+                            <button type="submit" class="btn btn-primary" disabled="@isSearching">
+                                @if (isSearching)
+                                {
+                                    <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                                }
+                                Search
+                            </button>
+                        </div>
+                        <ValidationMessage For="() => searchRequest.Query" class="text-danger mt-2" />
+                    </EditForm>
+                </div>
+            </div>
+
+            <!-- Error Alert -->
+            @if (!string.IsNullOrEmpty(errorMessage))
+            {
+                <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                    <i class="bi bi-exclamation-triangle me-2"></i>
+                    @errorMessage
+                    <button type="button" class="btn-close" @onclick="() => errorMessage = string.Empty"></button>
+                </div>
+            }
+
+            <!-- Success Alert -->
+            @if (!string.IsNullOrEmpty(successMessage))
+            {
+                <div class="alert alert-success alert-dismissible fade show" role="alert">
+                    <i class="bi bi-check-circle me-2"></i>
+                    @successMessage
+                    <button type="button" class="btn-close" @onclick="() => successMessage = string.Empty"></button>
+                </div>
+            }
+
+            <!-- Search Results -->
+            @if (searchResults.Any())
+            {
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="bi bi-people me-2"></i>
+                            Search Results (@searchResults.Count)
+                        </h5>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="list-group list-group-flush">
+                            @foreach (var user in searchResults)
+                            {
+                                <div class="list-group-item">
+                                    <div class="d-flex align-items-center">
+                                        <!-- Avatar -->
+                                        <div class="me-3">
+                                            @if (!string.IsNullOrEmpty(user.AvatarUrl))
+                                            {
+                                                <img src="@user.AvatarUrl" alt="@user.DisplayName" 
+                                                     class="rounded-circle" width="48" height="48" />
+                                            }
+                                            else
+                                            {
+                                                <div class="bg-primary rounded-circle d-flex align-items-center justify-content-center" 
+                                                     style="width: 48px; height: 48px;">
+                                                    <i class="bi bi-person-fill text-white"></i>
+                                                </div>
+                                            }
+                                        </div>
+
+                                        <!-- User Info -->
+                                        <div class="flex-grow-1">
+                                            <h6 class="mb-1">
+                                                @(!string.IsNullOrEmpty(user.DisplayName) ? user.DisplayName : user.UserName)
+                                            </h6>
+                                            @if (!string.IsNullOrEmpty(user.UserName) && user.UserName != user.DisplayName)
+                                            {
+                                                <p class="mb-1 text-muted small">@@@user.UserName</p>
+                                            }
+                                            @if (!string.IsNullOrEmpty(user.Email))
+                                            {
+                                                <p class="mb-0 text-muted small">@user.Email</p>
+                                            }
+                                        </div>
+
+                                        <!-- Contact Status & Actions -->
+                                        <div class="ms-3">
+                                            @if (user.ContactStatus is null)
+                                            {
+                                                <button class="btn btn-outline-primary btn-sm" 
+                                                        @onclick="() => SendContactRequestAsync(user.UserId)"
+                                                        disabled="@IsSendingRequest(user.UserId)">
+                                                    @if (IsSendingRequest(user.UserId))
+                                                    {
+                                                        <span class="spinner-border spinner-border-sm me-1"></span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <i class="bi bi-person-plus me-1"></i>
+                                                    }
+                                                    Add Contact
+                                                </button>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge @GetStatusBadgeClass(user.ContactStatus.Value)">
+                                                    <i class="@GetStatusIcon(user.ContactStatus.Value) me-1"></i>
+                                                    @GetStatusText(user.ContactStatus.Value)
+                                                </span>
+                                            }
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+            else if (hasSearched && !isSearching)
+            {
+                <div class="text-center py-5">
+                    <i class="bi bi-search display-4 text-muted mb-3"></i>
+                    <h5 class="text-muted">No users found</h5>
+                    <p class="text-muted">Try adjusting your search terms.</p>
+                </div>
+            }
+            else if (!hasSearched)
+            {
+                <div class="text-center py-5">
+                    <i class="bi bi-people display-4 text-muted mb-3"></i>
+                    <h5 class="text-muted">Find and connect with people</h5>
+                    <p class="text-muted">Search by name, username, or email to find users to connect with.</p>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    private ContactSearchRequest searchRequest = new() { Query = "" };
+    private List<UserSearchResultDto> searchResults = new();
+    private HashSet<string> sendingRequests = new();
+    private bool isSearching = false;
+    private bool hasSearched = false;
+    private string errorMessage = string.Empty;
+    private string successMessage = string.Empty;
+
+    private async Task SearchUsersAsync()
+    {
+        if (string.IsNullOrWhiteSpace(searchRequest.Query))
+            return;
+
+        isSearching = true;
+        errorMessage = string.Empty;
+        searchResults.Clear();
+
+        try
+        {
+            var response = await Http.PostAsJsonAsync("api/contacts/search", searchRequest);
+            
+            if (response.IsSuccessStatusCode)
+            {
+                searchResults = await response.Content.ReadFromJsonAsync<List<UserSearchResultDto>>() ?? new();
+                hasSearched = true;
+            }
+            else
+            {
+                errorMessage = "Failed to search users. Please try again.";
+            }
+        }
+        catch (Exception)
+        {
+            errorMessage = "An error occurred while searching. Please try again.";
+        }
+        finally
+        {
+            isSearching = false;
+        }
+    }
+
+    private async Task SendContactRequestAsync(string userId)
+    {
+        sendingRequests.Add(userId);
+        errorMessage = string.Empty;
+        successMessage = string.Empty;
+
+        try
+        {
+            var request = new SendContactRequestDto { ReceiverId = userId };
+            var response = await Http.PostAsJsonAsync("api/contacts/requests", request);
+
+            if (response.IsSuccessStatusCode)
+            {
+                successMessage = "Contact request sent successfully!";
+                
+                // Update the user's status in the search results
+                var user = searchResults.FirstOrDefault(u => u.UserId == userId);
+                if (user is not null)
+                {
+                    user.ContactStatus = ContactStatusDto.Pending;
+                }
+            }
+            else if (response.StatusCode == System.Net.HttpStatusCode.Conflict)
+            {
+                errorMessage = "Contact relationship already exists with this user.";
+            }
+            else
+            {
+                errorMessage = "Failed to send contact request. Please try again.";
+            }
+        }
+        catch (Exception)
+        {
+            errorMessage = "An error occurred while sending the contact request.";
+        }
+        finally
+        {
+            sendingRequests.Remove(userId);
+        }
+    }
+
+    private bool IsSendingRequest(string userId) => sendingRequests.Contains(userId);
+
+    private string GetStatusBadgeClass(ContactStatusDto status) => status switch
+    {
+        ContactStatusDto.Pending => "bg-warning",
+        ContactStatusDto.Accepted => "bg-success",
+        ContactStatusDto.Rejected => "bg-danger",
+        ContactStatusDto.Blocked => "bg-dark",
+        _ => "bg-secondary"
+    };
+
+    private string GetStatusIcon(ContactStatusDto status) => status switch
+    {
+        ContactStatusDto.Pending => "bi bi-clock",
+        ContactStatusDto.Accepted => "bi bi-check-circle",
+        ContactStatusDto.Rejected => "bi bi-x-circle",
+        ContactStatusDto.Blocked => "bi bi-shield",
+        _ => "bi bi-question-circle"
+    };
+
+    private string GetStatusText(ContactStatusDto status) => status switch
+    {
+        ContactStatusDto.Pending => "Pending",
+        ContactStatusDto.Accepted => "Connected",
+        ContactStatusDto.Rejected => "Rejected",
+        ContactStatusDto.Blocked => "Blocked",
+        _ => "Unknown"
+    };
+}

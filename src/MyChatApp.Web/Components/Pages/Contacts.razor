@@ -1,0 +1,485 @@
+@page "/contacts"
+@using MyChatApp.Web.Models
+@using System.Net.Http.Json
+@inject HttpClient Http
+@inject IJSRuntime JSRuntime
+@inject NavigationManager Navigation
+@attribute [Authorize]
+
+<PageTitle>My Contacts</PageTitle>
+
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h1 class="h3 mb-0">
+                    <i class="bi bi-people me-2"></i>
+                    My Contacts
+                </h1>
+                <a href="/contacts/search" class="btn btn-primary">
+                    <i class="bi bi-search me-2"></i>
+                    Find People
+                </a>
+            </div>
+
+            <!-- Error Alert -->
+            @if (!string.IsNullOrEmpty(errorMessage))
+            {
+                <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                    <i class="bi bi-exclamation-triangle me-2"></i>
+                    @errorMessage
+                    <button type="button" class="btn-close" @onclick="() => errorMessage = string.Empty"></button>
+                </div>
+            }
+
+            <!-- Success Alert -->
+            @if (!string.IsNullOrEmpty(successMessage))
+            {
+                <div class="alert alert-success alert-dismissible fade show" role="alert">
+                    <i class="bi bi-check-circle me-2"></i>
+                    @successMessage
+                    <button type="button" class="btn-close" @onclick="() => successMessage = string.Empty"></button>
+                </div>
+            }
+
+            <!-- Loading -->
+            @if (isLoading)
+            {
+                <div class="text-center py-5">
+                    <div class="spinner-border" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p class="mt-3 text-muted">Loading contacts...</p>
+                </div>
+            }
+            else
+            {
+                <!-- Tabs -->
+                <ul class="nav nav-tabs mb-4" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link @(activeTab == "accepted" ? "active" : "")" 
+                                @onclick="@(() => SetActiveTab("accepted"))"
+                                type="button">
+                            <i class="bi bi-people me-2"></i>
+                            Connected (@acceptedContacts.Count)
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link @(activeTab == "pending" ? "active" : "")" 
+                                @onclick="@(() => SetActiveTab("pending"))"
+                                type="button">
+                            <i class="bi bi-clock me-2"></i>
+                            Pending (@pendingContacts.Count)
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link @(activeTab == "blocked" ? "active" : "")" 
+                                @onclick="@(() => SetActiveTab("blocked"))"
+                                type="button">
+                            <i class="bi bi-shield me-2"></i>
+                            Blocked (@blockedContacts.Count)
+                        </button>
+                    </li>
+                </ul>
+
+                <!-- Tab Content -->
+                <div class="tab-content">
+                    <!-- Connected Contacts -->
+                    @if (activeTab == "accepted")
+                    {
+                        @if (acceptedContacts.Any())
+                        {
+                            <div class="row">
+                                @foreach (var contact in acceptedContacts)
+                                {
+                                    <div class="col-md-6 col-lg-4 mb-3">
+                                        <div class="card h-100">
+                                            <div class="card-body">
+                                                <div class="d-flex align-items-center mb-3">
+                                                    @if (!string.IsNullOrEmpty(contact.AvatarUrl))
+                                                    {
+                                                        <img src="@contact.AvatarUrl" alt="@contact.DisplayName" 
+                                                             class="rounded-circle me-3" width="48" height="48" />
+                                                    }
+                                                    else
+                                                    {
+                                                        <div class="bg-primary rounded-circle d-flex align-items-center justify-content-center me-3" 
+                                                             style="width: 48px; height: 48px;">
+                                                            <i class="bi bi-person-fill text-white"></i>
+                                                        </div>
+                                                    }
+                                                    <div class="flex-grow-1">
+                                                        <h6 class="mb-1">
+                                                            @(!string.IsNullOrEmpty(contact.DisplayName) ? contact.DisplayName : contact.UserName)
+                                                        </h6>
+                                                        @if (!string.IsNullOrEmpty(contact.UserName) && contact.UserName != contact.DisplayName)
+                                                        {
+                                                            <small class="text-muted">@@@contact.UserName</small>
+                                                        }
+                                                    </div>
+                                                </div>
+                                                <div class="d-flex gap-2">
+                                                    <button class="btn btn-outline-warning btn-sm flex-fill" 
+                                                            @onclick="() => BlockContactAsync(contact.Id)"
+                                                            disabled="@IsUpdating(contact.Id)">
+                                                        @if (IsUpdating(contact.Id))
+                                                        {
+                                                            <span class="spinner-border spinner-border-sm"></span>
+                                                        }
+                                                        else
+                                                        {
+                                                            <i class="bi bi-shield me-1"></i>
+                                                        }
+                                                        Block
+                                                    </button>
+                                                    <button class="btn btn-outline-danger btn-sm flex-fill" 
+                                                            @onclick="() => RemoveContactAsync(contact.Id)"
+                                                            disabled="@IsDeleting(contact.Id)">
+                                                        @if (IsDeleting(contact.Id))
+                                                        {
+                                                            <span class="spinner-border spinner-border-sm"></span>
+                                                        }
+                                                        else
+                                                        {
+                                                            <i class="bi bi-trash me-1"></i>
+                                                        }
+                                                        Remove
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="text-center py-5">
+                                <i class="bi bi-people display-4 text-muted mb-3"></i>
+                                <h5 class="text-muted">No connected contacts</h5>
+                                <p class="text-muted">Start by searching for people to connect with.</p>
+                                <a href="/contacts/search" class="btn btn-primary">
+                                    <i class="bi bi-search me-2"></i>
+                                    Find People
+                                </a>
+                            </div>
+                        }
+                    }
+
+                    <!-- Pending Contacts -->
+                    @if (activeTab == "pending")
+                    {
+                        @if (pendingContacts.Any())
+                        {
+                            <div class="row">
+                                @foreach (var contact in pendingContacts)
+                                {
+                                    <div class="col-md-6 col-lg-4 mb-3">
+                                        <div class="card h-100">
+                                            <div class="card-body">
+                                                <div class="d-flex align-items-center mb-3">
+                                                    @if (!string.IsNullOrEmpty(contact.AvatarUrl))
+                                                    {
+                                                        <img src="@contact.AvatarUrl" alt="@contact.DisplayName" 
+                                                             class="rounded-circle me-3" width="48" height="48" />
+                                                    }
+                                                    else
+                                                    {
+                                                        <div class="bg-primary rounded-circle d-flex align-items-center justify-content-center me-3" 
+                                                             style="width: 48px; height: 48px;">
+                                                            <i class="bi bi-person-fill text-white"></i>
+                                                        </div>
+                                                    }
+                                                    <div class="flex-grow-1">
+                                                        <h6 class="mb-1">
+                                                            @(!string.IsNullOrEmpty(contact.DisplayName) ? contact.DisplayName : contact.UserName)
+                                                        </h6>
+                                                        @if (!string.IsNullOrEmpty(contact.UserName) && contact.UserName != contact.DisplayName)
+                                                        {
+                                                            <small class="text-muted">@@@contact.UserName</small>
+                                                        }
+                                                        <div class="mt-1">
+                                                            <span class="badge bg-warning">
+                                                                @(contact.IsRequester ? "Sent" : "Received")
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                
+                                                @if (contact.IsRequester)
+                                                {
+                                                    <!-- Request sent by current user -->
+                                                    <button class="btn btn-outline-secondary btn-sm w-100" 
+                                                            @onclick="() => RemoveContactAsync(contact.Id)"
+                                                            disabled="@IsDeleting(contact.Id)">
+                                                        @if (IsDeleting(contact.Id))
+                                                        {
+                                                            <span class="spinner-border spinner-border-sm me-1"></span>
+                                                        }
+                                                        else
+                                                        {
+                                                            <i class="bi bi-x-circle me-1"></i>
+                                                        }
+                                                        Cancel Request
+                                                    </button>
+                                                }
+                                                else
+                                                {
+                                                    <!-- Request received by current user -->
+                                                    <div class="d-flex gap-2">
+                                                        <button class="btn btn-success btn-sm flex-fill" 
+                                                                @onclick="() => AcceptContactAsync(contact.Id)"
+                                                                disabled="@IsUpdating(contact.Id)">
+                                                            @if (IsUpdating(contact.Id))
+                                                            {
+                                                                <span class="spinner-border spinner-border-sm"></span>
+                                                            }
+                                                            else
+                                                            {
+                                                                <i class="bi bi-check-circle me-1"></i>
+                                                            }
+                                                            Accept
+                                                        </button>
+                                                        <button class="btn btn-outline-danger btn-sm flex-fill" 
+                                                                @onclick="() => RejectContactAsync(contact.Id)"
+                                                                disabled="@IsUpdating(contact.Id)">
+                                                            @if (IsUpdating(contact.Id))
+                                                            {
+                                                                <span class="spinner-border spinner-border-sm"></span>
+                                                            }
+                                                            else
+                                                            {
+                                                                <i class="bi bi-x-circle me-1"></i>
+                                                            }
+                                                            Reject
+                                                        </button>
+                                                    </div>
+                                                }
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="text-center py-5">
+                                <i class="bi bi-clock display-4 text-muted mb-3"></i>
+                                <h5 class="text-muted">No pending contact requests</h5>
+                                <p class="text-muted">You have no pending contact requests at the moment.</p>
+                            </div>
+                        }
+                    }
+
+                    <!-- Blocked Contacts -->
+                    @if (activeTab == "blocked")
+                    {
+                        @if (blockedContacts.Any())
+                        {
+                            <div class="row">
+                                @foreach (var contact in blockedContacts)
+                                {
+                                    <div class="col-md-6 col-lg-4 mb-3">
+                                        <div class="card h-100">
+                                            <div class="card-body">
+                                                <div class="d-flex align-items-center mb-3">
+                                                    @if (!string.IsNullOrEmpty(contact.AvatarUrl))
+                                                    {
+                                                        <img src="@contact.AvatarUrl" alt="@contact.DisplayName" 
+                                                             class="rounded-circle me-3" width="48" height="48" />
+                                                    }
+                                                    else
+                                                    {
+                                                        <div class="bg-dark rounded-circle d-flex align-items-center justify-content-center me-3" 
+                                                             style="width: 48px; height: 48px;">
+                                                            <i class="bi bi-person-fill text-white"></i>
+                                                        </div>
+                                                    }
+                                                    <div class="flex-grow-1">
+                                                        <h6 class="mb-1">
+                                                            @(!string.IsNullOrEmpty(contact.DisplayName) ? contact.DisplayName : contact.UserName)
+                                                        </h6>
+                                                        @if (!string.IsNullOrEmpty(contact.UserName) && contact.UserName != contact.DisplayName)
+                                                        {
+                                                            <small class="text-muted">@@@contact.UserName</small>
+                                                        }
+                                                    </div>
+                                                </div>
+                                                <button class="btn btn-outline-primary btn-sm w-100" 
+                                                        @onclick="() => UnblockContactAsync(contact.Id)"
+                                                        disabled="@IsUpdating(contact.Id)">
+                                                    @if (IsUpdating(contact.Id))
+                                                    {
+                                                        <span class="spinner-border spinner-border-sm me-1"></span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <i class="bi bi-unlock me-1"></i>
+                                                    }
+                                                    Unblock
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="text-center py-5">
+                                <i class="bi bi-shield display-4 text-muted mb-3"></i>
+                                <h5 class="text-muted">No blocked contacts</h5>
+                                <p class="text-muted">You haven't blocked any contacts.</p>
+                            </div>
+                        }
+                    }
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    private List<ContactDto> allContacts = new();
+    private List<ContactDto> acceptedContacts = new();
+    private List<ContactDto> pendingContacts = new();
+    private List<ContactDto> blockedContacts = new();
+    
+    private HashSet<int> updatingContacts = new();
+    private HashSet<int> deletingContacts = new();
+    private bool isLoading = true;
+    private string activeTab = "accepted";
+    private string errorMessage = string.Empty;
+    private string successMessage = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadContactsAsync();
+    }
+
+    private async Task LoadContactsAsync()
+    {
+        isLoading = true;
+        errorMessage = string.Empty;
+
+        try
+        {
+            var response = await Http.GetAsync("api/contacts");
+            
+            if (response.IsSuccessStatusCode)
+            {
+                allContacts = await response.Content.ReadFromJsonAsync<List<ContactDto>>() ?? new();
+                FilterContacts();
+            }
+            else
+            {
+                errorMessage = "Failed to load contacts. Please try again.";
+            }
+        }
+        catch (Exception)
+        {
+            errorMessage = "An error occurred while loading contacts.";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void FilterContacts()
+    {
+        acceptedContacts = allContacts.Where(c => c.Status == ContactStatusDto.Accepted).ToList();
+        pendingContacts = allContacts.Where(c => c.Status == ContactStatusDto.Pending).ToList();
+        blockedContacts = allContacts.Where(c => c.Status == ContactStatusDto.Blocked).ToList();
+    }
+
+    private void SetActiveTab(string tab)
+    {
+        activeTab = tab;
+        StateHasChanged();
+    }
+
+    private async Task AcceptContactAsync(int contactId)
+    {
+        await UpdateContactStatusAsync(contactId, ContactStatusDto.Accepted, "Contact request accepted!");
+    }
+
+    private async Task RejectContactAsync(int contactId)
+    {
+        await UpdateContactStatusAsync(contactId, ContactStatusDto.Rejected, "Contact request rejected.");
+    }
+
+    private async Task BlockContactAsync(int contactId)
+    {
+        await UpdateContactStatusAsync(contactId, ContactStatusDto.Blocked, "Contact has been blocked.");
+    }
+
+    private async Task UnblockContactAsync(int contactId)
+    {
+        await UpdateContactStatusAsync(contactId, ContactStatusDto.Accepted, "Contact has been unblocked.");
+    }
+
+    private async Task UpdateContactStatusAsync(int contactId, ContactStatusDto status, string successMsg)
+    {
+        updatingContacts.Add(contactId);
+        errorMessage = string.Empty;
+        successMessage = string.Empty;
+
+        try
+        {
+            var request = new UpdateContactRequestDto { Status = status };
+            var response = await Http.PutAsJsonAsync($"api/contacts/{contactId}", request);
+
+            if (response.IsSuccessStatusCode)
+            {
+                successMessage = successMsg;
+                await LoadContactsAsync(); // Reload to get updated data
+            }
+            else
+            {
+                errorMessage = "Failed to update contact. Please try again.";
+            }
+        }
+        catch (Exception)
+        {
+            errorMessage = "An error occurred while updating the contact.";
+        }
+        finally
+        {
+            updatingContacts.Remove(contactId);
+        }
+    }
+
+    private async Task RemoveContactAsync(int contactId)
+    {
+        deletingContacts.Add(contactId);
+        errorMessage = string.Empty;
+        successMessage = string.Empty;
+
+        try
+        {
+            var response = await Http.DeleteAsync($"api/contacts/{contactId}");
+
+            if (response.IsSuccessStatusCode)
+            {
+                successMessage = "Contact has been removed.";
+                await LoadContactsAsync(); // Reload to get updated data
+            }
+            else
+            {
+                errorMessage = "Failed to remove contact. Please try again.";
+            }
+        }
+        catch (Exception)
+        {
+            errorMessage = "An error occurred while removing the contact.";
+        }
+        finally
+        {
+            deletingContacts.Remove(contactId);
+        }
+    }
+
+    private bool IsUpdating(int contactId) => updatingContacts.Contains(contactId);
+    private bool IsDeleting(int contactId) => deletingContacts.Contains(contactId);
+}

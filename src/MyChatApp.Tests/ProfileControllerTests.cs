@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using MyChatApp.ApiService.Controllers;
 using MyChatApp.ApiService.Models;
@@ -15,6 +16,7 @@ public class ProfileControllerTests
 {
     private ProfileController _controller;
     private UserManager<ApplicationUser> _userManager;
+    private ApplicationDbContext _context;
     private ILogger<ProfileController> _logger;
     private ApplicationUser _testUser;
 
@@ -25,8 +27,14 @@ public class ProfileControllerTests
             Substitute.For<IUserStore<ApplicationUser>>(),
             null, null, null, null, null, null, null, null);
         
+        // Create in-memory database for testing
+        var options = new DbContextOptionsBuilder<ApplicationDbContext>()
+            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
+            .Options;
+        _context = new ApplicationDbContext(options);
+        
         _logger = Substitute.For<ILogger<ProfileController>>();
-        _controller = new ProfileController(_userManager, _logger);
+        _controller = new ProfileController(_userManager, _context, _logger);
 
         _testUser = new ApplicationUser
         {
@@ -59,6 +67,7 @@ public class ProfileControllerTests
     [TearDown]
     public void TearDown()
     {
+        _context?.Dispose();
         _userManager?.Dispose();
     }
 
