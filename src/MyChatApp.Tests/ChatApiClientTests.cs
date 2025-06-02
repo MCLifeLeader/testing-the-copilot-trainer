@@ -26,19 +26,18 @@ public class ChatApiClientTests
     }
 
     [Test]
-    public async Task SendMessageAsync_WithValidContent_ReturnsResponse()
+    public async Task SendMessageAsync_WithValidContent_ReturnsNull_WhenApiUnavailable()
     {
         // Arrange
         var httpClient = new HttpClient();
         httpClient.BaseAddress = new Uri("https://localhost/"); // Mock base address
         var chatApiClient = new ChatApiClient(httpClient);
 
-        // Act & Assert - This test mainly verifies the method doesn't throw
-        // In a real scenario, we would mock the HTTP client or use integration tests
+        // Act & Assert - Should handle API unavailability gracefully
         var result = await chatApiClient.SendMessageAsync("test message");
         
-        // Since we don't have a real API running, result will be null
-        // This test verifies that the method handles the case gracefully
+        // Since the API is not available, the method should handle the exception
+        // and return null (as per the current implementation)
         Assert.That(result, Is.Null);
     }
 

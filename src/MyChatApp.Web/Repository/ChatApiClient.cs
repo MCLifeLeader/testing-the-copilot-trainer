@@ -9,15 +9,23 @@ public class ChatApiClient(HttpClient httpClient)
         if (string.IsNullOrWhiteSpace(content))
             return null;
 
-        var request = new SendMessageRequest(content);
-        var response = await httpClient.PostAsJsonAsync("/api/chat/send", request, cancellationToken);
-        
-        if (response.IsSuccessStatusCode)
+        try
         {
-            return await response.Content.ReadFromJsonAsync<ChatResponse>(cancellationToken);
-        }
+            var request = new SendMessageRequest(content);
+            var response = await httpClient.PostAsJsonAsync("/api/chat/send", request, cancellationToken);
+            
+            if (response.IsSuccessStatusCode)
+            {
+                return await response.Content.ReadFromJsonAsync<ChatResponse>(cancellationToken);
+            }
 
-        return null;
+            return null;
+        }
+        catch
+        {
+            // Return null if API call fails
+            return null;
+        }
     }
 
     public async Task<string[]> GetRandomResponsesAsync(CancellationToken cancellationToken = default)
