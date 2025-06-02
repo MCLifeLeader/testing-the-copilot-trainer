@@ -21,6 +21,7 @@
   <ItemGroup>
     <ProjectReference Include="..\MyChatApp.AppHost\MyChatApp.AppHost.csproj" />
     <ProjectReference Include="..\MyChatApp.Web\MyChatApp.Web.csproj" />
+    <ProjectReference Include="..\MyChatApp.ApiService\MyChatApp.ApiService.csproj" />
   </ItemGroup>
 
   <ItemGroup>
