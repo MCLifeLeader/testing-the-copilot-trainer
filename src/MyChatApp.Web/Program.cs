@@ -6,6 +6,7 @@ using MyChatApp.Web;
 using MyChatApp.Web.Components;
 using MyChatApp.Web.Components.Account;
 using MyChatApp.Web.Data;
+using MyChatApp.Web.Repository;
 using MyChatApp.Web.Services;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -28,6 +29,11 @@ builder.Services.AddHttpClient<WeatherApiClient>(client =>
 {
     // This URL uses "https+http://" to indicate HTTPS is preferred over HTTP.
     // Learn more about service discovery scheme resolution at https://aka.ms/dotnet/sdschemes.
+    client.BaseAddress = new("https+http://apiservice");
+});
+
+builder.Services.AddHttpClient<ChatApiClient>(client =>
+{
     client.BaseAddress = new("https+http://apiservice");
 });
 

@@ -1,5 +1,7 @@
 @page "/chat"
 @inject IJSRuntime JSRuntime
+@inject ChatApiClient ChatApi
+@using MyChatApp.Web.Models
 
 <PageTitle>Chat</PageTitle>
 
@@ -47,9 +49,9 @@
     protected override void OnInitialized()
     {
         // Add some sample messages for demonstration
-        messages.Add(new ChatMessage { Content = "Hello! How can I help you today?", IsUser = false, Timestamp = DateTime.Now.AddMinutes(-5) });
-        messages.Add(new ChatMessage { Content = "Hi there! I'm testing the chat functionality.", IsUser = true, Timestamp = DateTime.Now.AddMinutes(-4) });
-        messages.Add(new ChatMessage { Content = "Great! The chat is working well. Feel free to ask me anything.", IsUser = false, Timestamp = DateTime.Now.AddMinutes(-3) });
+        messages.Add(new ChatMessage("Hello! How can I help you today?", false, DateTime.Now.AddMinutes(-5)));
+        messages.Add(new ChatMessage("Hi there! I'm testing the chat functionality.", true, DateTime.Now.AddMinutes(-4)));
+        messages.Add(new ChatMessage("Great! The chat is working well. Feel free to ask me anything.", false, DateTime.Now.AddMinutes(-3)));
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -66,12 +68,7 @@
             return;
 
         // Add user message
-        messages.Add(new ChatMessage 
-        { 
-            Content = currentMessage, 
-            IsUser = true, 
-            Timestamp = DateTime.Now 
-        });
+        messages.Add(new ChatMessage(currentMessage, true, DateTime.Now));
 
         var userMessage = currentMessage;
         currentMessage = string.Empty;
@@ -90,30 +87,27 @@
             Console.WriteLine($"Scroll error: {ex.Message}");
         }
 
-        // Simulate bot response with some variety
-        await Task.Delay(1000); // Simulate thinking time
-        
-        var responses = new[]
+        try
         {
-            "That's interesting! Can you tell me more?",
-            "I understand. Is there anything specific you'd like to know?",
-            "Thanks for sharing that with me.",
-            "That's a great question! Let me think about that.",
-            "I see what you mean. How can I help you with that?",
-            "That sounds important. Would you like to explore this further?",
-            "I appreciate you bringing that up. What are your thoughts on it?",
-            "That's a good point. Is there anything else you'd like to discuss?"
-        };
-        
-        var random = new Random();
-        var response = responses[random.Next(responses.Length)];
-        
-        messages.Add(new ChatMessage 
-        { 
-            Content = response, 
-            IsUser = false, 
-            Timestamp = DateTime.Now 
-        });
+            // Call API to get response
+            var apiResponse = await ChatApi.SendMessageAsync(userMessage);
+            
+            if (apiResponse is not null)
+            {
+                messages.Add(new ChatMessage(apiResponse.Content, false, apiResponse.Timestamp));
+            }
+            else
+            {
+                // Fallback response if API fails
+                messages.Add(new ChatMessage("I'm having trouble connecting right now. Please try again later.", false, DateTime.Now));
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"API error: {ex.Message}");
+            // Fallback response if API fails
+            messages.Add(new ChatMessage("I'm having trouble connecting right now. Please try again later.", false, DateTime.Now));
+        }
 
         StateHasChanged();
         
@@ -139,12 +133,5 @@
     private async Task ScrollToBottom()
     {
         await JSRuntime.InvokeVoidAsync("scrollToBottom", "chatMessages");
-    }
-
-    public class ChatMessage
-    {
-        public string Content { get; set; } = string.Empty;
-        public bool IsUser { get; set; }
-        public DateTime Timestamp { get; set; }
     }
 }
