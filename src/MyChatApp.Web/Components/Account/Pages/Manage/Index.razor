@@ -3,11 +3,13 @@
 @using System.ComponentModel.DataAnnotations
 @using Microsoft.AspNetCore.Identity
 @using MyChatApp.Web.Data
+@using MyChatApp.Web.Services
 
 @inject UserManager<ApplicationUser> UserManager
 @inject SignInManager<ApplicationUser> SignInManager
 @inject IdentityUserAccessor UserAccessor
 @inject IdentityRedirectManager RedirectManager
+@inject IFileUploadService FileUploadService
 
 <PageTitle>Profile</PageTitle>
 
@@ -15,21 +17,114 @@
 <StatusMessage/>
 
 <div class="row">
-    <div class="col-md-6">
-        <EditForm Model="Input" FormName="profile" OnValidSubmit="OnValidSubmitAsync" method="post">
+    <div class="col-md-8">
+        <EditForm Model="Input" FormName="profile" OnValidSubmit="OnValidSubmitAsync" method="post" enctype="multipart/form-data">
             <DataAnnotationsValidator/>
             <ValidationSummary class="text-danger" role="alert"/>
+            
+            <!-- Avatar Section -->
+            <div class="mb-3">
+                <label class="form-label">Profile Picture</label>
+                <div class="d-flex align-items-center">
+                    @if (!string.IsNullOrEmpty(user.AvatarUrl))
+                    {
+                        <img src="@user.AvatarUrl" alt="Profile Picture" class="rounded-circle me-3" style="width: 64px; height: 64px; object-fit: cover;" />
+                    }
+                    else
+                    {
+                        <div class="rounded-circle me-3 bg-secondary d-flex align-items-center justify-content-center" style="width: 64px; height: 64px;">
+                            <i class="bi bi-person-fill text-white"></i>
+                        </div>
+                    }
+                    <div>
+                        <InputFile OnChange="OnAvatarSelected" class="form-control" accept="image/*" />
+                        <div class="form-text">JPG, PNG, or GIF. Max size: 5MB</div>
+                        @if (!string.IsNullOrEmpty(avatarError))
+                        {
+                            <div class="text-danger small">@avatarError</div>
+                        }
+                    </div>
+                </div>
+            </div>
+
             <div class="form-floating mb-3">
                 <input type="text" value="@username" class="form-control" placeholder="Please choose your username." disabled/>
                 <label for="username" class="form-label">Username</label>
             </div>
+            
+            <div class="form-floating mb-3">
+                <InputText @bind-Value="Input.DisplayName" class="form-control" placeholder="Enter your display name"/>
+                <label for="display-name" class="form-label">Display Name</label>
+                <ValidationMessage For="() => Input.DisplayName" class="text-danger"/>
+            </div>
+            
+            <div class="form-floating mb-3">
+                <InputTextArea @bind-Value="Input.Bio" class="form-control" placeholder="Tell us about yourself" style="height: 100px"/>
+                <label for="bio" class="form-label">Bio</label>
+                <ValidationMessage For="() => Input.Bio" class="text-danger"/>
+            </div>
+            
             <div class="form-floating mb-3">
                 <InputText @bind-Value="Input.PhoneNumber" class="form-control" placeholder="Please enter your phone number."/>
                 <label for="phone-number" class="form-label">Phone number</label>
                 <ValidationMessage For="() => Input.PhoneNumber" class="text-danger"/>
             </div>
-            <button type="submit" class="w-100 btn btn-lg btn-primary">Save</button>
+            
+            <div class="mb-3">
+                <label class="form-label">Profile Visibility</label>
+                <InputSelect @bind-Value="Input.ProfileVisibility" class="form-select">
+                    <option value="@ProfileVisibility.Public">Public - Everyone can see your profile</option>
+                    <option value="@ProfileVisibility.ContactsOnly">Contacts Only - Only your contacts can see your profile</option>
+                    <option value="@ProfileVisibility.Private">Private - Only you can see your profile</option>
+                </InputSelect>
+                <ValidationMessage For="() => Input.ProfileVisibility" class="text-danger"/>
+            </div>
+            
+            <button type="submit" class="w-100 btn btn-lg btn-primary" disabled="@isSubmitting">
+                @if (isSubmitting)
+                {
+                    <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                    <text>Saving...</text>
+                }
+                else
+                {
+                    <text>Save</text>
+                }
+            </button>
         </EditForm>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h5>Profile Preview</h5>
+            </div>
+            <div class="card-body text-center">
+                @if (!string.IsNullOrEmpty(user.AvatarUrl))
+                {
+                    <img src="@user.AvatarUrl" alt="Profile Picture" class="rounded-circle mb-3" style="width: 80px; height: 80px; object-fit: cover;" />
+                }
+                else
+                {
+                    <div class="rounded-circle mx-auto mb-3 bg-secondary d-flex align-items-center justify-content-center" style="width: 80px; height: 80px;">
+                        <i class="bi bi-person-fill text-white" style="font-size: 2rem;"></i>
+                    </div>
+                }
+                <h6>@(!string.IsNullOrEmpty(Input.DisplayName) ? Input.DisplayName : username)</h6>
+                @if (!string.IsNullOrEmpty(Input.Bio))
+                {
+                    <p class="text-muted small">@Input.Bio</p>
+                }
+                <small class="text-muted">
+                    Visibility: @(Input.ProfileVisibility switch
+                    {
+                        ProfileVisibility.Public => "Public",
+                        ProfileVisibility.ContactsOnly => "Contacts Only",
+                        ProfileVisibility.Private => "Private",
+                        _ => "Public"
+                    })
+                </small>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -37,6 +132,8 @@
     private ApplicationUser user = default!;
     private string? username;
     private string? phoneNumber;
+    private bool isSubmitting = false;
+    private string? avatarError;
 
     [CascadingParameter]
     private HttpContext HttpContext { get; set; } = default!;
@@ -51,16 +148,110 @@
         phoneNumber = await UserManager.GetPhoneNumberAsync(user);
 
         Input.PhoneNumber ??= phoneNumber;
+        Input.DisplayName ??= user.DisplayName;
+        Input.Bio ??= user.Bio;
+        Input.ProfileVisibility = user.ProfileVisibility;
+    }
+
+    private async Task OnAvatarSelected(InputFileChangeEventArgs e)
+    {
+        avatarError = null;
+        var file = e.File;
+
+        if (file is null)
+            return;
+
+        // Validate file
+        if (!FileUploadService.IsValidImage(file))
+        {
+            avatarError = "Please select a valid image file (JPG, PNG, or GIF) under 5MB.";
+            return;
+        }
+
+        try
+        {
+            isSubmitting = true;
+            StateHasChanged();
+
+            // Delete old avatar if exists
+            if (!string.IsNullOrEmpty(user.AvatarUrl))
+            {
+                await FileUploadService.DeleteAvatarAsync(user.AvatarUrl);
+            }
+
+            // Upload new avatar
+            var avatarUrl = await FileUploadService.UploadAvatarAsync(file, user.Id);
+
+            // Update user
+            user.AvatarUrl = avatarUrl;
+            var result = await UserManager.UpdateAsync(user);
+
+            if (result.Succeeded)
+            {
+                await SignInManager.RefreshSignInAsync(user);
+                RedirectManager.RedirectToCurrentPageWithStatus("Profile picture updated successfully", HttpContext);
+            }
+            else
+            {
+                avatarError = "Failed to update profile picture.";
+            }
+        }
+        catch (Exception)
+        {
+            avatarError = "An error occurred while uploading the image.";
+        }
+        finally
+        {
+            isSubmitting = false;
+            StateHasChanged();
+        }
     }
 
     private async Task OnValidSubmitAsync()
     {
+        isSubmitting = true;
+        var hasChanges = false;
+
         if (Input.PhoneNumber != phoneNumber)
         {
             var setPhoneResult = await UserManager.SetPhoneNumberAsync(user, Input.PhoneNumber);
             if (!setPhoneResult.Succeeded)
             {
                 RedirectManager.RedirectToCurrentPageWithStatus("Error: Failed to set phone number.", HttpContext);
+                return;
+            }
+            hasChanges = true;
+        }
+
+        if (Input.DisplayName != user.DisplayName)
+        {
+            user.DisplayName = Input.DisplayName;
+            hasChanges = true;
+        }
+
+        if (Input.Bio != user.Bio)
+        {
+            user.Bio = Input.Bio;
+            hasChanges = true;
+        }
+
+        if (Input.ProfileVisibility != user.ProfileVisibility)
+        {
+            user.ProfileVisibility = Input.ProfileVisibility;
+            hasChanges = true;
+        }
+
+        if (hasChanges)
+        {
+            var result = await UserManager.UpdateAsync(user);
+            if (!result.Succeeded)
+            {
+                foreach (var error in result.Errors)
+                {
+                    // Log error or handle appropriately
+                }
+                RedirectManager.RedirectToCurrentPageWithStatus("Error: Failed to update profile.", HttpContext);
+                return;
             }
         }
 
@@ -73,6 +264,16 @@
         [Phone]
         [Display(Name = "Phone number")]
         public string? PhoneNumber { get; set; }
-    }
 
+        [StringLength(100, ErrorMessage = "Display name cannot exceed 100 characters")]
+        [Display(Name = "Display name")]
+        public string? DisplayName { get; set; }
+
+        [StringLength(500, ErrorMessage = "Bio cannot exceed 500 characters")]
+        [Display(Name = "Bio")]
+        public string? Bio { get; set; }
+
+        [Display(Name = "Profile visibility")]
+        public ProfileVisibility ProfileVisibility { get; set; } = ProfileVisibility.Public;
+    }
 }
