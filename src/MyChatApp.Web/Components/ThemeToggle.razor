@@ -1,0 +1,32 @@
+@using MyChatApp.Web.Services
+@implements IDisposable
+@inject ThemeService ThemeService
+
+<button class="theme-toggle" @onclick="ToggleTheme" title="Toggle dark/light mode">
+    @if (ThemeService.IsDarkMode)
+    {
+        <span class="bi bi-sun-fill" aria-hidden="true"></span>
+    }
+    else
+    {
+        <span class="bi bi-moon-fill" aria-hidden="true"></span>
+    }
+</button>
+
+@code {
+    protected override async Task OnInitializedAsync()
+    {
+        await ThemeService.InitializeAsync();
+        ThemeService.OnThemeChanged += StateHasChanged;
+    }
+
+    private async Task ToggleTheme()
+    {
+        await ThemeService.ToggleThemeAsync();
+    }
+
+    public void Dispose()
+    {
+        ThemeService.OnThemeChanged -= StateHasChanged;
+    }
+}

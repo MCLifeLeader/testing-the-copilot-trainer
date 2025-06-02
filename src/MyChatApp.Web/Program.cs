@@ -6,6 +6,7 @@ using MyChatApp.Web;
 using MyChatApp.Web.Components;
 using MyChatApp.Web.Components.Account;
 using MyChatApp.Web.Data;
+using MyChatApp.Web.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -48,6 +49,7 @@ builder.Services.AddIdentityCore<ApplicationUser>(options => options.SignIn.Requ
     .AddDefaultTokenProviders();
 
 builder.Services.AddSingleton<IEmailSender<ApplicationUser>, IdentityNoOpEmailSender>();
+builder.Services.AddScoped<ThemeService>();
 
 var app = builder.Build();
 
